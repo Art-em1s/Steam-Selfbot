@@ -1,0 +1,17 @@
+{
+    "name": "SteamBot",
+    "version": "1.0.0",
+    "description": "",
+    "main": "bot.js",
+    "scripts": {
+        "start": "node bot.js"
+    },
+    "author": "Artemis",
+    "license": "ISC",
+    "dependencies": {
+        "steam-totp": "^2.1.0",
+        "steam-tradeoffer-manager": "^2.9.5",
+        "steam-user": "^4.9.1",
+        "steamcommunity": "^3.40.0"
+    }
+}
