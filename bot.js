@@ -78,10 +78,10 @@ client.on('friendMessage', function(steamID, message) {
         let persona = personas[steamID.getSteamID64()];
         let name = persona ? persona.player_name : ("[" + steamID.getSteamID64() + "]");
         let currentTime = new Date().getTime()/1000;
-        let nextMessageTime = userContacted[steamID]+3600;
+        let nextMessageTime = userContacted[steamID]+3600; //this will add 3600 to undefined if not set, fix
         if (userContacted[steamID] == undefined || currentTime >= nextMessageTime){ //prevent people messaging me multiple times from being spammed with the automated message
             userContacted[steamID] = currentTime;
-            client.chatMessage(steamID, `Hi ${name}, I don't tend to check my steam messages. You're better contacting me via discord (Artemis#1237). This is an automated message.`);
+            client.chatMessage(steamID, `Hi ${name}, I don't tend to check my steam messages often. You're better contacting me via discord (Artemis#1237). This is an automated message.`);
             forwardSteamDM(`${name} (${steamID}) : ${message}\n(Auto-replied)`);
         } else {
             forwardSteamDM(`${name} (${steamID}) : ${message}`);
@@ -96,7 +96,14 @@ function checkRequest(steamID) {
             return;
         } else {
             let userLevel = results[steamID];
-            if (userLevel < 5) {
+            if (userLevel >= 100){
+                client.addFriend(steamID);
+                if (userContacted[steamID] == undefined || currentTime >= nextMessageTime){
+                    userContacted[steamID] = currentTime;
+                    client.chatMessage(steamID, `Hey, I'm afk right now (this is an automated message), if you let me know why you added me, I'll reply as soon as possible. For a faster reply you're better contacting me via discord (Artemis#1237).`);
+                    log_msg(`Accepted friend request from ${steamID} (${userLevel}) and sent auto-message.`);
+                }
+            } else if (userLevel < 5) {
                 client.removeFriend(steamID);
                 log_msg(`Ignored friend request from ${steamID} due to their level (${userLevel})`);
             } else {
