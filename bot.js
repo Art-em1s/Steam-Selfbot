@@ -38,7 +38,7 @@ client.on("webSession", (sessionid, cookies) => {
 
 manager.on("newOffer", (offer) => { //accept one sided, incoming trade offers
     if (offer.itemsToGive.length == 0 && offer.itemsToReceive.length > 0) {
-        log_msg(`Accepted Offer #${offer.id} from ${offer.partner.getSteamID64()}.`);
+        log_msg(`Accepting Offer #${offer.id} from ${offer.partner.getSteamID64()}.`);
         offer.accept();
     } else {
         log_msg(`Incoming Offer #${offer.id} from ${offer.partner.getSteamID64()}.`);
