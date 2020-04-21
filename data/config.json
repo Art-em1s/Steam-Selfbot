@@ -3,5 +3,7 @@
     "password": "",
     "secret": "",
     "wh_logs": "",
-    "wh_msgs": ""
+    "wh_msgs": "",
+    "wh_errors": "",
+    "msg": "Hey {USER}, this is an automated message that should have been changed."
 }
