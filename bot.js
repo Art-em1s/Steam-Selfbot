@@ -21,35 +21,50 @@ const logOnOptions = {
 
 client.logOn(logOnOptions);
 
-client.on("loggedOn", () => {
-    client.setPersona(1);
+client.on("loggedOn", (e) => {
+    client.setPersona(3);
     client.getNicknames(() => {
         log_msg(`Logged in as ${client.accountInfo.name} / ${client.steamID}`);
-        checkFriendRequests();
+        checkFriendRequests()
     });
     
+});
+
+client.on('err', function (e) {
+    log_err(e)
+});
+
+community.on('sessionExpired', function(e) {
+    log_msg('Session expired.');
+    if (e) {
+        log_err(e)
+    }
 });
 
 client.on("webSession", (sessionid, cookies) => {
     manager.setCookies(cookies);
     community.setCookies(cookies);
-    community.startConfirmationChecker(20000, config.identitySecret);
 });
 
 manager.on("newOffer", (offer) => { //accept one sided, incoming trade offers
     if (offer.itemsToGive.length == 0 && offer.itemsToReceive.length > 0) {
-        log_msg(`Accepting Offer #${offer.id} from ${offer.partner.getSteamID64()}.`);
-        offer.accept();
+        offer.accept((e, status) => {
+            if (e) {
+                log_err(e);
+            } else {
+                log_msg(`Accepting Offer #${offer.id} from ${offer.partner.getsteamID64()}.`);
+            }
+        });
     } else {
-        log_msg(`Incoming Offer #${offer.id} from ${offer.partner.getSteamID64()}.`);
+        log_msg(`Incoming Offer #${offer.id} from ${offer.partner.getsteamID64()}.`);
     }
 });
 
 manager.on("receivedOfferChanged", function(offer, oldState) { //log accepted trades
     if (offer.state == TradeOfferManager.ETradeOfferState.Accepted) {
-        offer.getExchangeDetails((err, status, tradeInitTime, receivedItems, sentItems) => {
-            if (err) {
-                log_msg(`Error ${err}`);
+        offer.getExchangeDetails((e, status, tradeInitTime, receivedItems, sentItems) => {
+            if (e) {
+                log_err(`Trade err: ${e}`);
                 return;
             }
             let newReceivedItems = receivedItems.map(item => item.new_assetid);
@@ -58,68 +73,74 @@ manager.on("receivedOfferChanged", function(offer, oldState) { //log accepted tr
             for (var i = 0; i < receivedItems.length; i++) {
                 newReceivedItemNames+= receivedItems[i].market_name+"\n";
             }
-            newReceivedItemNames+="```"
+            newReceivedItemNames+="```";
             log_msg(`Status: ${TradeOfferManager.ETradeStatus[status]}\n+${newReceivedItems.length}/-${newSentItems.length}\nItems Recieved: ${newReceivedItemNames}`);
         });
     }
 });
 
+
+client.on('friendMessage', function(steamID, message) {
+    try{
+        console.log(userContacted)
+        if(message.includes("[/tradeoffer]") || message.includes("Invited you to play a game!")){
+            return;
+        }
+        client.getPersonas([steamID], function(e, personas) {
+            let persona = personas[steamID];
+            let name = persona ? persona.player_name : ("[" + steamID + "]");
+            if (!userContacted.includes(steamID.getSteam3RenderedID())){ //prevent people messaging me multiple times from being spammed with the automated message
+                client.chatMessage(steamID, config.msg.replace("{USER}", persona.player_name));
+                forwardSteamDM(`${name} (${steamID}) : ${message}\n(Auto-replied)`);
+                userContacted.push(steamID.getSteam3RenderedID());
+            } else {
+                forwardSteamDM(`${name} (${steamID}) : ${message}`);
+            }
+        });
+    } catch(e) {
+        log_err(e);
+    }
+});
+
 client.on("friendRelationship", function(steamID, relationship) {
-    if (relationship == SteamUser.EFriendRelationship.RequestRecipient) {
+    if (relationship == 2) {
         checkRequest(steamID);
     }
 });
 
-client.on('friendMessage', function(steamID, message) {
-    if(message.includes("[/tradeoffer]") || message.includes("Invited you to play a game!")){
-        return
+function checkFriendRequests() {
+    log_msg(`Checking friend requests.`);
+    for (let steamID in client.myFriends) {
+        if (client.myFriends[steamID] == 2) {
+            checkRequest(steamID);
+        }
     }
-    client.getPersonas([steamID], function(err, personas) {
-        let persona = personas[steamID.getSteamID64()];
-        let name = persona ? persona.player_name : ("[" + steamID.getSteamID64() + "]");
-        let currentTime = new Date().getTime()/1000;
-        let nextMessageTime = userContacted[steamID]+3600; //this will add 3600 to undefined if not set, fix
-        if (userContacted[steamID] == undefined || currentTime >= nextMessageTime){ //prevent people messaging me multiple times from being spammed with the automated message
-            userContacted[steamID] = currentTime;
-            client.chatMessage(steamID, `Hi ${name}, I don't tend to check my steam messages often. You're better contacting me via discord (Artemis#1237). This is an automated message.`);
-            forwardSteamDM(`${name} (${steamID}) : ${message}\n(Auto-replied)`);
-        } else {
-            forwardSteamDM(`${name} (${steamID}) : ${message}`);
-        }
-    });
-});
-
-function checkRequest(steamID) {
-    client.getSteamLevels([steamID], function(err, results){
-        if (err) {
-            log_msg(`Error ${err}`);
-            return;
-        } else {
-            let userLevel = results[steamID];
-            if (userLevel >= 100){
-                client.addFriend(steamID);
-                if (userContacted[steamID] == undefined || currentTime >= nextMessageTime){
-                    userContacted[steamID] = currentTime;
-                    client.chatMessage(steamID, `Hey, I'm afk right now (this is an automated message), if you let me know why you added me, I'll reply as soon as possible. For a faster reply you're better contacting me via discord (Artemis#1237).`);
-                    log_msg(`Accepted friend request from ${steamID} (${userLevel}) and sent auto-message.`);
-                }
-            } else if (userLevel < 5) {
-                client.removeFriend(steamID);
-                log_msg(`Ignored friend request from ${steamID} due to their level (${userLevel})`);
-            } else {
-                log_msg(`Incoming friend request from ${steamID}.`);
-            }
-        }
-    });
 }
 
-function checkFriendRequests(){
-    log_msg(`Checking friend requests.`);
-    for(let user in client.myFriends){
-        if(client.myFriends[user] == 2){
-            checkRequest(user);
+function checkRequest(steamID) {
+    client.getPersonas([steamID], function (e, personas) {
+        if (e){
+            log_err(e)
         }
-    }
+        client.getSteamLevels([steamID], function (e, results) {
+            if (e) {
+                log_err(`Get Level err ${e}`);
+            } else {
+                let level = results[steamID];
+                let persona = personas[steamID];
+                if (level >= 10) {
+                    client.addFriend(steamID);
+                    client.chatMessage(steamID, config.msg.replace("{USER}", persona.player_name));
+                    console.log(config.msg.replace("{USER}", persona.player_name));
+                    log_msg(`Accepted FR from: ${persona.player_name} (${steamID}) | Level: ${level}`);
+                    userContacted.push(steamID.getSteam3RenderedID());
+                } else {
+                    client.removeFriend(steamID);
+                    log_msg(`Declined FR from: ${persona.player_name} (${steamID}) | Level: ${level}`);
+                }
+            }
+        });
+    });
 }
 
 function log_msg(msg){
@@ -132,12 +153,12 @@ function log_msg(msg){
             .setFooter(new Date(new Date().getTime()).toLocaleString());
         Hook.send(wh_msg);
     } catch(e) {
-        log_error(e)
+        log_err(e);
     }
 }
 function forwardSteamDM(msg){
     try{
-        const Hook = new webhook.Webhook(config.wh_say);
+        const Hook = new webhook.Webhook(config.wh_msgs);
         var wh_msg = new webhook.MessageBuilder()
             .setName("SteamMsg")
             .setColor("#00ff00")
@@ -145,11 +166,20 @@ function forwardSteamDM(msg){
             .setFooter(new Date(new Date().getTime()).toLocaleString());
         Hook.send(wh_msg);
     } catch(e) {
-        log_error(e)
+        log_err(e);
     }
 }
 
-function log_error(msg){
-    const Hook = new webhook.Webhook(config.wh_logs);
-    Hook.err("ErrorLog", msg);
+function log_err(msg){
+    try{
+        const Hook = new webhook.Webhook(config.wh_errs);
+        var wh_msg = new webhook.MessageBuilder()
+            .setName("errLog")
+            .setColor("#ff0000")
+            .setDescription(msg)
+            .setFooter(new Date(new Date().getTime()).toLocaleString());
+        Hook.send(wh_msg);
+    } catch(e) {
+        console.log(e); //if this errors just print to console
+    }
 }
